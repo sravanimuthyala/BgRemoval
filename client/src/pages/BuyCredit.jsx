@@ -1,7 +1,102 @@
 import React from "react";
 import { assets, plans } from "../assets/assets";
+import { useContext } from "react";
+import { toast } from "react-toastify";
+import { AppContext } from "../context/AppContext";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@clerk/clerk-react";
+import axios from "axios";
 
 const BuyCredit = () => {
+  const {backendurl,loadCreditsData}=useContext(AppContext)
+  const navigate=useNavigate()
+  const {getToken}=useAuth()
+  const loadRazorpay = () => {
+  return new Promise((resolve) => {
+    if (window.Razorpay) {
+      console.log("Already loaded");
+      resolve(true);
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+
+    script.onload = () => {
+      console.log("Razorpay loaded ✅");
+      resolve(true);
+    };
+
+    script.onerror = () => {
+      console.log("Failed to load ❌");
+      resolve(false);
+    };
+
+    document.body.appendChild(script);
+  });
+};
+  const initPay = async (order) => {
+  console.log("INIT PAY CALLED");
+  console.log("ORDER:", order);
+  console.log("KEY:", import.meta.env.VITE_RAZORPAY_KEY_ID);
+
+  const options = {
+    key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+    amount: order.amount,
+    name: 'Credits Payment',
+    description: "Credits Payment",
+    order_id: order.id,
+    receipt: order.receipt,
+    handler: async (response) => {
+      console.log("PAYMENT SUCCESS:", response);
+    }
+  };
+
+  console.log("OPTIONS:", options);
+  console.log("Razorpay object:", window.Razorpay);
+
+  const rzp = new window.Razorpay(options);
+  console.log("INSTANCE CREATED");
+
+  rzp.open();
+  console.log("OPEN CALLED");
+};
+  
+  const paymentRazorpay = async (planId) => {
+  console.log("STEP 1: clicked");
+
+  try {
+    const isLoadedScript = await loadRazorpay();
+    console.log("STEP 2: Razorpay loaded");
+
+    const token = await getToken();
+    console.log("STEP 3: token:", token);
+
+    if (!token) {
+      console.log("❌ TOKEN IS NULL");
+      return;
+    }
+
+    console.log("STEP 4: calling API");
+
+    const { data } = await axios.post(
+      backendurl + "/api/user/pay-razor",
+      { planId },
+      { headers: { token } }
+    );
+
+    console.log("STEP 5: API response", data);
+
+    if (data.success) {
+      console.log("STEP 6: calling initPay");
+      initPay(data.order);
+    }
+
+  } catch (error) {
+    console.log("💥 ERROR:", error);
+  }
+};
   return (
     <div className="min-h-[80vh] text-center pt-14 mb-10">
       <button className="border border-gray-400 px-10 py-2 rounded-full mb-6">
@@ -19,7 +114,9 @@ const BuyCredit = () => {
             <p className="mt-6">
               <span className="text-3xl font-medium">{item.price}</span>/{item.credits} credits
             </p>
-            <button className="w-full bg-gray-800 text-white mt-8 text-sm rounded-md py-2.5 min-w-52">Purchase</button>
+            <button onClick={()=> {
+              console.log('clicked',getToken);
+                paymentRazorpay(item.id)}}  className="w-full bg-gray-800 text-white mt-8 text-sm rounded-md py-2.5 min-w-52">Purchase</button>
           </div>
         ))}
       </div>
