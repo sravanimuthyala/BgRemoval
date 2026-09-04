@@ -1,25 +1,101 @@
-import React from 'react'
-import { assets } from '../assets/assets'
-import { useContext } from 'react'
-import { AppContext } from '../context/AppContext'
-const Upload = () => {
-  const {removeBg}=useContext(AppContext)
-  return (
-    <div className='pb-16'>
-        {/* Tilte */}
-      <h1 className="text-center text-2xl md:text-3xl lg:text-4xl mt-4 font-semibold bg-gradient-to-r from-gray-900 to-gray-400 bg-clip-text text-transparent py-6 md:py-16">See the magic. Try now</h1>
-      <div className='text-center mb-24'>
-                <input onChange={e=>removeBg(e.target.files[0])} type="file" accept='image/*' id="upload2" hidden />
-                <label
-                  className="inline-flex gap-3 px-8 py-3.5 rounded-full cursor-pointer bg-gradient-to-r from-violet-600 to-fuchsia-500 m-auto hover:scale-105 transition-all duration-700 "
-                  htmlFor="upload2"
-                >
-                  <img width={20} src={assets.upload_btn_icon} />
-                  <p className="text-white text-sm">Upload your image</p>
-                </label>
-              </div>
-    </div>
-  )
-}
+import React, { createContext, useState } from "react";
+import { useAuth } from "@clerk/clerk-react";
+import axios from "axios";
+import { toast } from "react-toastify";
 
-export default Upload
+export const AppContext = createContext();
+
+const AppContextProvider = (props) => {
+  const backendurl = import.meta.env.VITE_BACKEND_URL;
+
+  const { getToken } = useAuth();
+
+  const [credit, setCredit] = useState(0);
+  const [image, setImage] = useState(null);
+  const [resultImage, setResultImage] = useState("");
+
+  // Load user's credits
+  const loadCreditsData = async () => {
+    try {
+      const token = await getToken();
+
+      if (!token) return;
+
+      const { data } = await axios.get(
+        backendurl + "/api/user/credits",
+        {
+          headers: {
+            token,
+          },
+        }
+      );
+
+      if (data.success) {
+        setCredit(data.credit);
+      }
+    } catch (error) {
+      console.log(error);
+      toast.error(error.message);
+    }
+  };
+
+  // Remove image background
+  const removeBg = async (file) => {
+    try {
+      if (!file) return;
+
+      setImage(file);
+      setResultImage("");
+
+      const token = await getToken();
+
+      if (!token) {
+        toast.error("Please login first");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const { data } = await axios.post(
+        backendurl + "/api/image/remove-bg",
+        formData,
+        {
+          headers: {
+            token,
+          },
+        }
+      );
+
+      if (data.success) {
+        setResultImage(data.resultImage);
+        await loadCreditsData();
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      console.log(error);
+      toast.error(error.message);
+    }
+  };
+
+  const value = {
+    backendurl,
+    credit,
+    setCredit,
+    image,
+    setImage,
+    resultImage,
+    setResultImage,
+    loadCreditsData,
+    removeBg,
+  };
+
+  return (
+    <AppContext.Provider value={value}>
+      {props.children}
+    </AppContext.Provider>
+  );
+};
+
+export default AppContextProvider;
