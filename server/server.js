@@ -9,7 +9,6 @@ const PORT = process.env.PORT || 4000;
 
 const app = express();
 
-await connectDB();
 
 // CORS
 app.use(
@@ -22,6 +21,7 @@ app.use(
     allowedHeaders: ["Content-Type", "token", "Authorization"],
   })
 );
+await connectDB();
 
 app.use(express.json());
 
